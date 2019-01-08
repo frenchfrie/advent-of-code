@@ -1,18 +1,10 @@
 package aoc_2018;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.graph.Graph;
-import com.google.common.graph.GraphBuilder;
-import com.google.common.graph.ImmutableGraph;
-import com.google.common.graph.MutableGraph;
-import com.google.inject.grapher.graphviz.CompassPoint;
-
 import org.slf4j.Logger;
 
 import java.awt.*;
 import java.util.*;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -23,26 +15,6 @@ public class Day6 {
 
     private static final Logger LOGGER = getLogger(Day6.class);
 
-    public static Point findPointWithLargestFiniteInfluence(Stream<String> coordinates) {
-        List<Location> sourcePoints = coordinates.map(Location::parsePoint).collect(Collectors.toList());
-
-        Map<Point, Location> locationsLibrary = new HashMap<>();
-        for (Location location : sourcePoints) {
-            locationsLibrary.put(location.coordinates, location);
-        }
-
-        Rectangle surfaceCoveredBySource = getSurfaceCovered(sourcePoints);
-        LOGGER.info("points:\n{}", drawMap(surfaceCoveredBySource, sourcePoints));
-
-        Set<Integer> idOnBorders = findBorderIds(locationsLibrary, surfaceCoveredBySource);
-
-        LOGGER.info("Found id on the border: {}", idOnBorders);
-
-        TreeMap<Integer, Integer> idToScore = aggregateScores(locationsLibrary.values());
-        LOGGER.info("Scores is: {}", idToScore);
-        return sourcePoints.get(idToScore.entrySet().stream().filter(e -> !idOnBorders.contains(e.getKey())).max(Comparator.comparing(Map.Entry::getValue)).get().getKey()).coordinates;
-    }
-
     private static Set<Integer> findBorderIds(Map<Point, Location> locationsLibrary, Rectangle surfaceCoveredBySource) {
         Set<Integer> idOnBorders = new HashSet<>();
         for (int x = surfaceCoveredBySource.x, maxX = surfaceCoveredBySource.width + surfaceCoveredBySource.x; x <= maxX; x++) {
@@ -51,41 +23,32 @@ public class Day6 {
                 for (int y = surfaceCoveredBySource.y; y <= maxY; y++) {
                     Point borderPoint = new Point(x, y);
                     Location location = locationsLibrary.get(borderPoint);
-                    LOGGER.debug("Border point found: {} of id: {}", borderPoint, location.id);
-                    idOnBorders.add(location.id);
+                    LOGGER.debug("Border point found: {} of id: {}", borderPoint, location.getId());
+                    idOnBorders.add(location.getId());
                 }
             } else {
                 Point topBorderPoint = new Point(x, surfaceCoveredBySource.y);
-                int topId = locationsLibrary.get(topBorderPoint).id;
-                LOGGER.debug("Border point found: {} of id: {}", topBorderPoint, topId);
-                idOnBorders.add(topId);
+                Location topBorderLocation = locationsLibrary.get(topBorderPoint);
+                if (topBorderLocation != null) {
+                    Integer topId = topBorderLocation.getId();
+                    LOGGER.debug("Border point found: {} of id: {}", topBorderPoint, topId);
+                    idOnBorders.add(topId);
+                }
 
                 Point bottomBorderPoint = new Point(x, maxY);
                 Location bottomLocation = locationsLibrary.get(bottomBorderPoint);
-                LOGGER.debug("Border point found: {} of id: {}", bottomBorderPoint, bottomLocation.id);
-                idOnBorders.add(bottomLocation.id);
+                if (bottomLocation != null) {
+                    LOGGER.debug("Border point found: {} of id: {}", bottomBorderPoint, bottomLocation.getId());
+                    idOnBorders.add(bottomLocation.getId());
+                }
             }
         }
+        idOnBorders.remove(null);
         return idOnBorders;
     }
 
     private static TreeMap<Integer, Integer> aggregateScores(Collection<Location> locations) {
-        return locations.stream().collect(Collectors.toMap(l -> l.id, l -> 1, (i1, i2) -> i1 + i2, TreeMap::new));
-    }
-
-    private static boolean isCompletelyFilled(Rectangle surface, Map<Point, Location> locationsLibrary) {
-        boolean filled = true;
-        for (int x = surface.x, maxX = surface.width + surface.x; x <= maxX; x++) {
-            for (int y = surface.y, maxY = surface.height + surface.y; y <= maxY; y++) {
-                Point key = new Point(x, y);
-                if (!locationsLibrary.containsKey(key)) {
-                    filled = false;
-                    break;
-                }
-            }
-            if (!filled) break;
-        }
-        return filled;
+        return locations.stream().filter(l -> l.getId() != null).collect(Collectors.toMap(Location::getId, l -> 1, (i1, i2) -> i1 + i2, TreeMap::new));
     }
 
     private static Rectangle getSurfaceCovered(Collection<Location> locations) {
@@ -105,7 +68,11 @@ public class Day6 {
         for (Location location : pointList) {
             if (location.coordinates.x >= 0 && location.coordinates.x < surfaceWidth
                     && location.coordinates.y >= 0 && location.coordinates.y < surfaceHeight) {
-                raster[location.coordinates.x][location.coordinates.y] = location.id != null ? Integer.toString(location.id) : ".";
+
+                Integer locationId = location.id;
+
+
+                raster[location.coordinates.x][location.coordinates.y] = locationId != null ? Integer.toString(locationId) : (location.totalDistToAlSources < 10000 ? "#" : ".");
             }
         }
         StringBuilder drawn = new StringBuilder();
@@ -115,7 +82,7 @@ public class Day6 {
         }
         drawn.append('\n');
         for (int y = 0; y < surfaceHeight; y++) {
-            drawn.append(y%10);
+            drawn.append(y % 10);
             for (int x = 0; x < surfaceWidth; x++) {
                 drawn.append(raster[x][y]);
             }
@@ -125,62 +92,51 @@ public class Day6 {
     }
 
     @SuppressWarnings("UnstableApiUsage")
-    private static class Location {
+    public static class Location {
 
         private static int nextAvailableSourceId = 0;
 
-        private Integer id; // id of source location
-        private Integer distance; // distance from a source location, 0 if source
-        private final boolean source; // is a source location
         private final Point coordinates;
+        private Integer id;
+        private Location source;
+        private int totalDistToAlSources;
 
-        public Location(Integer id, boolean source, Point coordinates, Integer distance) {
-            this.id = id;
-            this.source = source;
+        // not source
+        public Location(Point coordinates) {
+            this.id = null;
             this.coordinates = coordinates;
-            this.distance = distance;
         }
 
-        private static Location createSource(Point coordinates) {
-            return new Location(nextAvailableSourceId++, true, coordinates, 0);
+        // sources
+        public Location(int id, Point coordinates) {
+            this.id = id;
+            this.coordinates = coordinates;
+        }
+
+        public Point getCoordinates() {
+            return coordinates;
+        }
+
+        public Location getSource() {
+            return source;
+        }
+
+        public void setSource(Location source) {
+            if (source != null) {
+                this.source = source;
+            } else {
+                this.source = null;
+            }
+        }
+
+        public Integer getId() {
+            return id == null && source != null ? source.getId() : id;
         }
 
         private static Location parsePoint(String input) {
             String[] split = input.split(",");
             Point point = new Point(Integer.parseInt(split[0].trim()), Integer.parseInt(split[1].trim()));
-            return createSource(point);
-        }
-
-        public void expand(Graph<Location> graph, int id, int distance, int depht) {
-
-
-            if (this.id == null) {
-                // untouched location
-                this.id = id;
-                this.distance = distance;
-            } else if (this.id == id) {
-                // already owned node
-            } else {
-                // another source owned node
-                if (this.distance == distance) {
-                    this.id = -1;
-                    this.distance = null;
-                } else if (this.distance < distance) {
-                    // discard, we are nearer to another source
-                } else {
-                    // we are closer
-                    this.id = id;
-                    this.distance = distance;
-                }
-            }
-
-            if (distance < depht) {
-                Set<Location> locations = graph.adjacentNodes(this);
-                locations.stream()
-                        .filter(n -> (n.id == null || n.id == id))
-                        .forEach(n -> n.expand(graph, id, distance + 1, depht));
-            }
-
+            return new Location(nextAvailableSourceId++, point);
         }
 
         @Override
@@ -202,15 +158,18 @@ public class Day6 {
         public String toString() {
             return MoreObjects.toStringHelper(this)
                     .add("id", id)
-                    .add("distance", distance)
                     .add("source", source)
                     .add("coordinates", coordinates)
                     .toString();
         }
+
+        public void setTotalDistToAlSources(int distanceSum) {
+            this.totalDistToAlSources = distanceSum;
+        }
     }
 
     @SuppressWarnings("UnstableApiUsage")
-    public static Point findPointWithLargestFiniteInfluence_v2(Stream<String> coordinates) {
+    public static Result findPointWithLargestFiniteInfluence_v3(Stream<String> coordinates) {
         Map<Point, Location> sourcePoints = coordinates.map(Location::parsePoint).collect(Collectors.toMap(l -> l.coordinates, l -> l));
 
         Rectangle surfaceCoveredBySource = getSurfaceCovered(sourcePoints.values());
@@ -219,62 +178,89 @@ public class Day6 {
 
         LOGGER.info("points:\n{}", drawMap(surfaceCoveredBySource, sourcePoints.values()));
 
-        MutableGraph<Location> graph = GraphBuilder.undirected().allowsSelfLoops(false)
-                .expectedNodeCount(surfaceCoveredBySource.height * surfaceCoveredBySource.width).build();
-
         // populate graph
         Location[][] locationRaster = new Location[surfaceCoveredBySource.width + 1][surfaceCoveredBySource.height + 1];
         for (int x = surfaceCoveredBySource.x, maxX = surfaceCoveredBySource.width + surfaceCoveredBySource.x; x <= maxX; x++) {
             for (int y = surfaceCoveredBySource.y, maxY = surfaceCoveredBySource.height + surfaceCoveredBySource.y; y <= maxY; y++) {
                 Point currentPoint = new Point(x, y);
                 Location sourceLocation = sourcePoints.get(currentPoint);
-                Location value = sourceLocation == null ? new Location(null, false, currentPoint, null) : sourceLocation;
+                Location value;
+                if (sourceLocation == null) {
+                    value = new Location(currentPoint);
+                    setNearestSource(value, sourcePoints.values());
+                } else {
+                    value = sourceLocation;
+                    setDistance(value, sourcePoints.values());
+                }
                 int absoluteX = x - surfaceCoveredBySource.x;
                 int absoluteY = y - surfaceCoveredBySource.y;
                 locationRaster[absoluteX][absoluteY] = value;
-                graph.addNode(value);
             }
         }
+        LOGGER.info("after distance calculation:\n{}", drawMap(surfaceCoveredBySource, Arrays.stream(locationRaster).flatMap(Arrays::stream).collect(Collectors.toList())));
 
-        for (int x = 0, maxX = surfaceCoveredBySource.width; x <= maxX; x++) {
-            for (int y = 0, maxY = surfaceCoveredBySource.height; y <= maxY; y++) {
-                Location value = locationRaster[x][y];
-                if (x > 0) {
-                    graph.putEdge(value, locationRaster[x - 1][y]);
-                }
-                if (x < surfaceCoveredBySource.width-1) {
-                    graph.putEdge(value, locationRaster[x + 1][y]);
-                }
-                if (y > 0) {
-                    graph.putEdge(value, locationRaster[x][y - 1]);
-                }
-                if (y < surfaceCoveredBySource.height-1) {
-                    graph.putEdge(value, locationRaster[x][y + 1]);
-                }
-            }
-        }
-        LOGGER.info("points:\n{}", drawMap(surfaceCoveredBySource, graph.nodes()));
-
-        ImmutableGraph<Location> immutableGraph = ImmutableGraph.copyOf(graph);
-        for (int i = 0; i < 1000; i++) {
-            for (Location source : sourcePoints.values()) {
-                source.expand(immutableGraph, source.id, 0, i);
-            }
-            LOGGER.info("points:\n{}", drawMap(surfaceCoveredBySource, graph.nodes()));
-            if (immutableGraph.nodes().stream().allMatch(n -> n.id != null)) {
-                LOGGER.info("All locations are tagged with an ID");
-                break;
-            }
-        }
-
-        Set<Integer> idOnBorders = findBorderIds(immutableGraph.nodes().stream().collect(Collectors.toMap(n -> n.coordinates, n -> n)), surfaceCoveredBySource);
+        Set<Integer> idOnBorders = findBorderIds(Arrays.stream(locationRaster).flatMap(Arrays::stream).collect(Collectors.toMap(n -> n.coordinates, n -> n)), surfaceCoveredBySource);
 
         LOGGER.info("Found id on the border: {}", idOnBorders);
-        TreeMap<Integer, Integer> idToScore = aggregateScores(immutableGraph.nodes());
+        TreeMap<Integer, Integer> idToScore = aggregateScores(Arrays.stream(locationRaster).flatMap(Arrays::stream).collect(Collectors.toList()));
         LOGGER.info("Scores is: {}", idToScore);
 
         Optional<Map.Entry<Integer, Integer>> max = idToScore.entrySet().stream().filter(e -> !idOnBorders.contains(e.getKey())).max(Comparator.comparing(Map.Entry::getValue));
         Map.Entry<Integer, Integer> integerIntegerEntry = max.get();
-        return sourcePoints.values().stream().filter(l -> Objects.equals(l.id, integerIntegerEntry.getKey())).findAny().get().coordinates;
+        Location mostUsedLocation = sourcePoints.values().stream().filter(l -> Objects.equals(l.getId(), integerIntegerEntry.getKey())).findAny().get();
+
+        long under10_000DistanceSummLocationNumber = Arrays.stream(locationRaster).flatMap(Arrays::stream).filter(l -> l.totalDistToAlSources < 10_000).count();
+        return new Result(mostUsedLocation, max.get().getValue(), (int) under10_000DistanceSummLocationNumber);
+    }
+
+    public static class Result {
+        public final Location mostUsedLocation;
+        public final Integer score;
+        public final Integer under10_000DistanceSummLocationNumber;
+
+        public Result(Location mostUsedLocation, Integer score, Integer under10_000DistanceSummLocationNumber) {
+            this.mostUsedLocation = mostUsedLocation;
+            this.score = score;
+            this.under10_000DistanceSummLocationNumber = under10_000DistanceSummLocationNumber;
+        }
+
+        @Override
+        public String toString() {
+            return MoreObjects.toStringHelper(this)
+                    .add("mostUsedLocation", mostUsedLocation)
+                    .add("score", score)
+                    .add("under10_000DistanceSummLocationNumber", under10_000DistanceSummLocationNumber)
+                    .toString();
+        }
+    }
+
+    private static void setNearestSource(Location loc, Collection<Location> sources) {
+        int minDistance = Integer.MAX_VALUE;
+        int distanceSum = 0;
+        Location nearestLocation = null;
+        for (Location source : sources) {
+            int distance = Math.abs(loc.coordinates.x - source.coordinates.x) + Math.abs(loc.coordinates.y - source.coordinates.y);
+            distanceSum += distance;
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestLocation = source;
+            } else if (distance == minDistance) {
+//                LOGGER.info("found equidistant ({}) location from {}:\n{} and\n{}", distance, loc, nearestLocation, source);
+                nearestLocation = null;
+            }
+        }
+        loc.setSource(nearestLocation);
+        loc.setTotalDistToAlSources(distanceSum);
+    }
+
+    private static void setDistance(Location loc, Collection<Location> sources) {
+        int distanceSum = 0;
+        for (Location source : sources) {
+            if (!source.equals(loc)) {
+                int distance = Math.abs(loc.coordinates.x - source.coordinates.x) + Math.abs(loc.coordinates.y - source.coordinates.y);
+                distanceSum += distance;
+            }
+        }
+        loc.setTotalDistToAlSources(distanceSum);
     }
 }
