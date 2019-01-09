@@ -6,8 +6,6 @@ import org.slf4j.Logger;
 import java.awt.*;
 import java.io.IOException;
 import java.net.URISyntaxException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.stream.Stream;
 
 import static org.junit.Assert.assertEquals;
@@ -18,7 +16,8 @@ public class Day6Test {
     private static final Logger LOGGER = getLogger(Day6Test.class);
 
     private Stream<String> getInput() throws IOException, URISyntaxException {
-        return Files.readAllLines(Paths.get(Day2Test.class.getResource("day6_puzzle_input.txt").toURI())).stream();
+        String name = "day6_puzzle_input.txt";
+        return AocTestUtils.getInput(name);
     }
 
     @Test
