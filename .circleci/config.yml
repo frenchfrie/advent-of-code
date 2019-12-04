@@ -1,6 +1,7 @@
 # Java Maven CircleCI 2.0 configuration file
 #
 # Check https://circleci.com/docs/2.0/language-java/ for more details
+# Also following https://circleci.com/docs/2.0/language-java-maven/
 #
 version: 2
 jobs:
@@ -33,4 +34,7 @@ jobs:
       # run tests!
       - run: mvn integration-test
       - store_test_results:
-          path: test-results
+          path: target/surefire-reports
+      - store_artifacts: # store the uberjar as an artifact
+          # Upload test summary for display in Artifacts: https://circleci.com/docs/2.0/artifacts/
+          path: target/advent-of-code-1.0-SNAPSHOT.jar
