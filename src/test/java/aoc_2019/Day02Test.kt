@@ -2,7 +2,6 @@ package aoc_2019
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.stream.Stream
 
 internal class Day02Test {
@@ -20,21 +19,11 @@ internal class Day02Test {
 
     @Test
     internal fun solve01() {
-        var counter = AtomicInteger()
+        println(Day02().solve(Aoc2019TestUtils.getInputOnLine(2), 2, 12))
+    }
 
-        println(Day02().solve(Aoc2019TestUtils.getInputOnLine(2).map {
-            input ->
-                if (counter.get() == 1) {
-                    counter.incrementAndGet()
-                    12
-                } else if (counter.get() == 2) {
-                    counter.incrementAndGet()
-                    2
-                } else {
-                    counter.incrementAndGet()
-                    input
-                }
-            }
-        ))
+    @Test
+    internal fun solve02() {
+        println(Day02().solve02(Aoc2019TestUtils.getInputOnLine(2)))
     }
 }
